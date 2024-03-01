@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const app = express();
+const { JWK } = require('jose');
 app.use(express.json());
 
 const keys = {};
@@ -23,14 +24,16 @@ generateKeyPair();
 // JWKS endpoint
 app.get('/jwks', (req, res) => {
     const jwks = {
-        keys: Object.values(keys).filter(key => key.expiry > Date.now()).map(({ publicKey, kid }) => ({
-            kty: 'RSA',
-            kid,
-            use: 'sig',
-            alg: 'RS256',
-            n: publicKey.export({ type: 'pkcs1', format: 'pem' }).match(/-----BEGIN PUBLIC KEY-----(.*)-----END PUBLIC KEY-----/s)[1].replace(/(\r\n|\n|\r| )/gm, ""),
-            e: 'AQAB',
-        }))
+        keys: Object.values(keys).filter(key => key.expiry > Date.now()).map(({ publicKey, kid }) => {
+            const keyObject = crypto.createPublicKey(publicKey);
+            const jwk = JWK.asKey(keyObject).toJWK(false);
+            return {
+                ...jwk,
+                kid,
+                use: 'sig',
+                alg: 'RS256',
+            };
+        })
     };
     res.json(jwks);
 });
